@@ -96,7 +96,9 @@ class barcode_generator {
 		$this->dispatch_render_image(
 			$image, $code, $x, $y, $w, $h, $colors, $widths, $options
 		);
-		return $image;
+                ob_start();
+                imagepng($image);
+		return ob_get_clean();
 	}
 
 	public function render_svg($symbology, $data, $options) {
@@ -891,9 +893,9 @@ class barcode_generator {
 			$data = $left . $right;
 		}
 		/* Replace * with missing or check digit. */
-		while (($o = strrpos($data, '*')) !== false) {
+		while (($o = strpos($data, '*')) !== false) {
 			$checksum = 0;
-			for ($i = 0; $i < 12; $i++) {
+			for ($i = 0; $i < $o; $i++) {
 				$digit = substr($data, $i, 1);
 				$checksum += (($i % 2) ? 1 : 3) * $digit;
 			}
@@ -963,9 +965,9 @@ class barcode_generator {
 			$data = $left . $right;
 		}
 		/* Replace * with missing or check digit. */
-		while (($o = strrpos($data, '*')) !== false) {
+		while (($o = strpos($data, '*')) !== false) {
 			$checksum = 0;
-			for ($i = 0; $i < 13; $i++) {
+			for ($i = 0; $i < $o; $i++) {
 				$digit = substr($data, $i, 1);
 				$checksum += (($i % 2) ? 3 : 1) * $digit;
 			}
@@ -993,9 +995,9 @@ class barcode_generator {
 			$data = $left . $right;
 		}
 		/* Replace * with missing or check digit. */
-		while (($o = strrpos($data, '*')) !== false) {
+		while (($o = strpos($data, '*')) !== false) {
 			$checksum = 0;
-			for ($i = 0; $i < 8; $i++) {
+			for ($i = 0; $i < $o; $i++) {
 				$digit = substr($data, $i, 1);
 				$checksum += (($i % 2) ? 1 : 3) * $digit;
 			}

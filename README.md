@@ -5,27 +5,7 @@
   * Output to PNG, GIF, JPEG, or SVG.
   * Generates UPC-A, UPC-E, EAN-13, EAN-8, Code 39, Code 93, Code 128, Codabar, ITF, QR Code, and Data Matrix.
 
-Use from a PHP script:
-
-```
-include 'barcode.php';
-
-$generator = new barcode_generator();
-
-/* Output directly to standard output. */
-$generator->output_image($format, $symbology, $data, $options);
-
-/* Create bitmap image. */
-$image = $generator->render_image($symbology, $data, $options);
-imagepng($image);
-imagedestroy($image);
-
-/* Generate SVG markup. */
-$svg = $generator->render_svg($symbology, $data, $options);
-echo $svg;
-```
-
-Use with GET or POST:
+### Use directly as a PHP script with GET or POST:
 
 ```
 barcode.php?f={format}&s={symbology}&d={data}&{options}
@@ -38,7 +18,43 @@ barcode.php?f=png&s=upc-e&d=06543217
 barcode.php?f=svg&s=qr&d=HELLO%20WORLD&sf=8&ms=r&md=0.8
 ```
 
-#### Options:
+**When using this method, you must escape non-alphanumeric characters with URL encoding, for example `%26` for `&` or `%2F` for `?`.**
+
+### Or use as a library from another PHP script:
+
+```
+include 'barcode.php';
+
+$generator = new barcode_generator();
+
+/* Output directly to standard output. */
+header("Content-Type: image/$format");
+$generator->output_image($format, $symbology, $data, $options);
+
+/* Create bitmap image and write to standard output. */
+header('Content-Type: image/png');
+$image = $generator->render_image($symbology, $data, $options);
+imagepng($image);
+imagedestroy($image);
+
+/* Create bitmap image and write to file. */
+$image = $generator->render_image($symbology, $data, $options);
+imagepng($image, $filename);
+imagedestroy($image);
+
+/* Generate SVG markup and write to standard output. */
+header('Content-Type: image/svg+xml');
+$svg = $generator->render_svg($symbology, $data, $options);
+echo $svg;
+
+/* Generate SVG markup and write to file. */
+$svg = $generator->render_svg($symbology, $data, $options);
+file_put_contents($filename, $svg);
+```
+
+**When using this method, you must NOT use URL encoding.**
+
+### Options:
 
 `f` - Format. One of:
 ```

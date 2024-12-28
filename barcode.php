@@ -164,8 +164,8 @@ class barcode_generator {
 		$bottom = (isset($options['pb']) ? (int)$options['pb'] : $vert);
 		$dwidth = ceil($size[0] * $scalex) + $left + $right;
 		$dheight = ceil($size[1] * $scaley) + $top + $bottom;
-		$iwidth = (isset($options['w']) ? (int)$options['w'] : $dwidth);
-		$iheight = (isset($options['h']) ? (int)$options['h'] : $dheight);
+                $iwidth = (isset($options['w']) ? (int)$options['w'] + $left + $right : $dwidth);
+                $iheight = (isset($options['h']) ? (int)$options['h'] + $top + $bottom : $dheight);
 		$swidth = $iwidth - $left - $right;
 		$sheight = $iheight - $top - $bottom;
 		return array(

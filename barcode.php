@@ -96,7 +96,9 @@ class barcode_generator {
 		$this->dispatch_render_image(
 			$image, $code, $x, $y, $w, $h, $colors, $widths, $options
 		);
-		return $image;
+                ob_start();
+                imagepng($image);
+		return ob_get_clean();
 	}
 
 	public function render_svg($symbology, $data, $options) {
@@ -322,6 +324,7 @@ class barcode_generator {
 	private function linear_render_image(
 		$image, $code, $x, $y, $w, $h, $colors, $widths, $options
 	) {
+                $showtext = (isset($options['st']) && $options['st'] == 0 ? false : true);
 		$textheight = (isset($options['th']) ? (int)$options['th'] : 10);
 		$textsize = (isset($options['ts']) ? (int)$options['ts'] : 1);
 		$textcolor = (isset($options['tc']) ? $options['tc'] : '000');
@@ -359,7 +362,7 @@ class barcode_generator {
 				imagefilledrectangle($image, $mx, $y, $mw - 1, $my - 1, $mc);
 				$mx = $mw;
 			}
-			if (!is_null($label)) {
+			if (!is_null($label) and $showtext) {
 				$lx = ($x + ($mx - $x) * $lx);
 				$lw = imagefontwidth($textsize) * strlen($label);
 				$lx = round($lx - $lw / 2);
@@ -372,6 +375,7 @@ class barcode_generator {
 	private function linear_render_svg(
 		$code, $x, $y, $w, $h, $colors, $widths, $options
 	) {
+                $showtext = (isset($options['st']) && $options['st'] == 0 ? false : true);
 		$textheight = (isset($options['th']) ? (int)$options['th'] : 10);
 		$textfont = (isset($options['tf']) ? $options['tf'] : 'monospace');
 		$textsize = (isset($options['ts']) ? (int)$options['ts'] : 10);
@@ -421,7 +425,7 @@ class barcode_generator {
 				}
 				$mx += $mw;
 			}
-			if (!is_null($label)) {
+			if (!is_null($label) and $showtext) {
 				$lx = ($x + ($mx - $x) * $lx);
 				$svg .= '<text';
 				$svg .= ' x="' . $lx . '" y="' . $ly . '"';
@@ -891,9 +895,9 @@ class barcode_generator {
 			$data = $left . $right;
 		}
 		/* Replace * with missing or check digit. */
-		while (($o = strrpos($data, '*')) !== false) {
+		while (($o = strpos($data, '*')) !== false) {
 			$checksum = 0;
-			for ($i = 0; $i < 12; $i++) {
+			for ($i = 0; $i < $o; $i++) {
 				$digit = substr($data, $i, 1);
 				$checksum += (($i % 2) ? 1 : 3) * $digit;
 			}
@@ -963,9 +967,9 @@ class barcode_generator {
 			$data = $left . $right;
 		}
 		/* Replace * with missing or check digit. */
-		while (($o = strrpos($data, '*')) !== false) {
+		while (($o = strpos($data, '*')) !== false) {
 			$checksum = 0;
-			for ($i = 0; $i < 13; $i++) {
+			for ($i = 0; $i < $o; $i++) {
 				$digit = substr($data, $i, 1);
 				$checksum += (($i % 2) ? 3 : 1) * $digit;
 			}
@@ -993,9 +997,9 @@ class barcode_generator {
 			$data = $left . $right;
 		}
 		/* Replace * with missing or check digit. */
-		while (($o = strrpos($data, '*')) !== false) {
+		while (($o = strpos($data, '*')) !== false) {
 			$checksum = 0;
-			for ($i = 0; $i < 8; $i++) {
+			for ($i = 0; $i < $o; $i++) {
 				$digit = substr($data, $i, 1);
 				$checksum += (($i % 2) ? 1 : 3) * $digit;
 			}

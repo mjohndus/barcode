@@ -362,14 +362,11 @@ class barcode_generator {
 				imagefilledrectangle($image, $mx, $y, $mw - 1, $my - 1, $mc);
 				$mx = $mw;
 			}
-			if (!is_null($label)) {
+			if (!is_null($label) and $showtext) {
 				$lx = ($x + ($mx - $x) * $lx);
 				$lw = imagefontwidth($textsize) * strlen($label);
 				$lx = round($lx - $lw / 2);
-				// imagestring($image, $textsize, $lx, $ly, $label, $textcolor);
-				if($showtext) {
-				   imagestring($image, $textsize, $lx, $ly, $label, $textcolor);
-				}
+				imagestring($image, $textsize, $lx, $ly, $label, $textcolor);
 			}
 			$x = $mx;
 		}
@@ -378,6 +375,7 @@ class barcode_generator {
 	private function linear_render_svg(
 		$code, $x, $y, $w, $h, $colors, $widths, $options
 	) {
+                $showtext = (isset($options['st']) && $options['st'] == 0 ? false : true);
 		$textheight = (isset($options['th']) ? (int)$options['th'] : 10);
 		$textfont = (isset($options['tf']) ? $options['tf'] : 'monospace');
 		$textsize = (isset($options['ts']) ? (int)$options['ts'] : 10);
@@ -427,7 +425,7 @@ class barcode_generator {
 				}
 				$mx += $mw;
 			}
-			if (!is_null($label)) {
+			if (!is_null($label) and $showtext) {
 				$lx = ($x + ($mx - $x) * $lx);
 				$svg .= '<text';
 				$svg .= ' x="' . $lx . '" y="' . $ly . '"';

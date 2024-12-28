@@ -1,5 +1,5 @@
 {
-    "name": "kreativekorp/barcode",
+    "name": "mjohndus/barcode",
     "type": "library",
     "description": "Generate barcodes from a single PHP file.",
     "homepage": "https://github.com/kreativekorp/barcode/",

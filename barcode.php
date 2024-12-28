@@ -324,7 +324,7 @@ class barcode_generator {
 	private function linear_render_image(
 		$image, $code, $x, $y, $w, $h, $colors, $widths, $options
 	) {
-                $showtext = (isset($options['st']) ? false : true);
+                $showtext = (isset($options['st']) && $options['st'] == 0 ? false : true);
 		$textheight = (isset($options['th']) ? (int)$options['th'] : 10);
 		$textsize = (isset($options['ts']) ? (int)$options['ts'] : 1);
 		$textcolor = (isset($options['tc']) ? $options['tc'] : '000');
@@ -366,9 +366,9 @@ class barcode_generator {
 				$lx = ($x + ($mx - $x) * $lx);
 				$lw = imagefontwidth($textsize) * strlen($label);
 				$lx = round($lx - $lw / 2);
-				imagestring($image, $textsize, $lx, $ly, $label, $textcolor);
+				// imagestring($image, $textsize, $lx, $ly, $label, $textcolor);
 				if($showtext) {
-					imagestring($image, $textsize, $lx, $ly, $label, $textcolor);
+				   imagestring($image, $textsize, $lx, $ly, $label, $textcolor);
 				}
 			}
 			$x = $mx;

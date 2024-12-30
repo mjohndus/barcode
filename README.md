@@ -75,7 +75,7 @@ file_put_contents($filename, $svg);
     ean-128        itf
 ```
 
-`d` - Data. For UPC or EAN, use `*` for missing digit. For Codabar, use `ABCD` or `ENT*` for start and stop characters. For QR, encode in Shift-JIS for kanji mode.
+`d` - Data. For UPC or EAN, use `*` (Fixed bug - now working correct) for missing digit. For Codabar, use `ABCD` or `ENT*` for start and stop characters. For QR, encode in Shift-JIS for kanji mode.
 
 `w` - Width of image. Overrides `sf` or `sx`.
 
@@ -103,7 +103,7 @@ file_put_contents($filename, $svg);
 
 `bc` - Background color in `#RRGGBB` format.
 
-`cs` - Color of spaces in `#RRGGBB` format.
+`cs` - Color of spaces in `#RRGGBB` format - Diabled by qr-code with option ms => r or x.
 
 `cm` - Color of modules in `#RRGGBB` format.
 
@@ -113,10 +113,17 @@ file_put_contents($filename, $svg);
 
 `ts` - Text size. For SVG output, this is in points and the default is 10. For PNG, GIF, or JPEG output, this is the GD library built-in font number from 1 to 5 and the default is 1. Applies to linear barcodes only.
 
-`th` - Distance from text baseline to bottom of modules. Default is 10. Applies to linear barcodes only.
+`th` - Distance from text baseline to bottom of modules. Default is 10. Applies to linear barcodes only. Fixed wrong direction
 
-`st` - Showtext set to 0 disables text on output Default is 1. Applies to linear barcodes only.
+```diff
++ gh - Distance from baseline for Module left - middle - right. Applies to linear barcodes (EAN + UPC) only.
 
++ st - Showtext -> set to 0 disables text on output Default is 1. Applies to linear barcodes only.
+
++ bd - draws a border -> 0 no border, 1 normal, r with radius (default).
+
++ sepa - adds Text Scan2pay on the right side from bottom to top.
+```
 `ms` - Module shape. One of: `s` for square, `r` for round, or `x` for X-shaped. Default is `s`. Applies to matrix barcodes only.
 
 `md` - Module density. A number between 0 and 1. Default is 1. Applies to matrix barcodes only.

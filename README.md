@@ -1,3 +1,6 @@
+
+![Linear Example](https://raw.github.com/mjohndus/barcode/mjohndus/examples/images/q-rcode.png)  ![Linear Example](https://raw.github.com/mjohndus/barcode/mjohndus/examples/images/linear.png)
+
 # barcode.php
 
 ### Generate barcodes from a single PHP file. MIT license.

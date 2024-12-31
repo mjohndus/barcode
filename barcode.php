@@ -70,61 +70,205 @@ class barcode_generator {
 		}
 	}
 
-	public function render_image($symbology, $data, $options) {
-		list($code, $widths, $width, $height, $x, $y, $w, $h) =
+        public function render_image($symbology, $data, $options, $imagick=true) {
+                if ($imagick && extension_loaded('imagick')) {
+                    $img = $this->render_imageick($symbology, $data, $options, $imagick=true);
+                    return $img;
+                }
+                else {
+                    $img = $this->render_imagegd($symbology, $data, $options, $imagick=false);
+                    return $img;
+                }
+        }
+
+        public function render_imageick($symbology, $data, $options, $imagick=true) {
+                list($code, $widths, $width, $height, $x, $y, $w, $h, $bord) =
+                        $this->encode_and_calculate_size($symbology, $data, $options);
+
+                $nscale = floor($width/50);
+                $sf = $nscale > 0 && $nscale < 5 ? ($nscale*6)+4 : 32;
+                $bw = $nscale < 2 ? 2 : 4;
+                $bb = $nscale < 2 ? 3 : $nscale*4;
+                $tw = (($sf*2)+$bb);
+                $ab = $nscale < 3 ? 5 : 8;
+
+                $rd = (isset($options['sf']) && $options['sf'] == 1) ? 10 : 15;
+
+                $image = new \Imagick();
+                $image->newImage($width, $height, 'none', 'png');
+                $barcode = new \imagickdraw();
+
+                $bgcolor = (isset($options['bc']) ? $options['bc'] : '#FFFFFF');
+                $bgcolor = new \ImagickPixel($bgcolor);
+                $bdcolor = (isset($options['bdc']) ? $options['bdc'] : '#000000');
+                $bdcolor = new \ImagickPixel($bdcolor);
+                $barcode->setfillcolor($bgcolor);
+                $barcode->setStrokeColor($bdcolor);
+                $barcode->setStrokeWidth($bw);
+
+                if (in_array('sepa', $options) && $symbology[0] == 'q') {
+
+                        $barcode->roundRectangle(ceil($bord/2), ceil($bord/2), $width-$bord, $height-$bord, $rd, $rd);
+                        $barcode->setStrokeWidth(0);
+                        $sepadat = true;
+
+                   } else if (isset($options['bd']) && $options['bd'][0] !== '0' && $options['bd'][1] == 'r' && !in_array('sepa', $options)) {
+                        $barcode->roundRectangle(ceil($bord/2), ceil($bord/2), $width-$bord, $height-$bord, $rd, $rd);
+                        $barcode->setStrokeWidth(0);
+                        $sepadat = false;
+
+                   } else if (isset($options['bd']) && $options['bd'][0] !== '0' && $options['bd'][1] == '0' && !in_array('sepa', $options)) {
+                        $barcode->rectangle(ceil($bord/2), ceil($bord/2), $width-$bord, $height-$bord);
+                        $barcode->setStrokeWidth(0);
+                        $sepadat = false;
+
+                   } else if (isset($options['bd']) && $options['bd'][0] == '0' && $options['bd'][1] == 'r' && !in_array('sepa', $options)) {
+                        $barcode->setStrokeColor($bgcolor);
+                        $barcode->setStrokeWidth(0);
+                        $barcode->roundRectangle(0, 0, $width, $height, $rd, $rd);
+                        $sepadat = false;
+
+                   } else {
+                        $barcode->setStrokeWidth(0);
+                        $barcode->rectangle(-1, -1, $width, $height);
+                        $sepadat = false;
+                }
+
+                $colors = [
+                           ((isset($options['cs']) && ! isset($options['ms'])) || (isset($options['ms']) && ($options['ms'] == 's') || $symbology[0] != 'q') ? $options['cs'] : '#00000000'),
+                           (isset($options['cm']) ? $options['cm'] : '#000000'),
+                           ($options['cz'] ?? '#00000000'), // reserved for quit zones linear barcodes
+                           (isset($options['tc']) ? $options['tc'] : '#777777'),
+                           (isset($options['c4']) ? $options['c4'] : '0F0'),
+                           (isset($options['c9']) ? $options['c9'] : '000')
+                          ];
+
+                $this->dispatch_render_imagick_gd(
+                       $barcode, $code, $x, $y, $w, $h, $colors, $widths, $options, $imagick=true
+                );
+
+                if ($sepadat) {
+                    $barcode->setStrokeColor($bgcolor);
+                    $barcode->setfillcolor($bgcolor);
+                    $barcode->rectangle($width-10, ($height/2)-$tw, $width-($bw == 4 ? 2 : 3), ($height/2)+$tw);
+
+                    $barcode->setStrokeColor('#00000000');
+                    $barcode->setfillcolor('black');
+                    $barcode->setFont(__dir__.'/FreeSans.ttf');
+                    $barcode->setFontSize($sf);
+                    $barcode->setTextAlignment(\Imagick::ALIGN_CENTER);
+                }
+
+                $image->drawimage($barcode);
+
+                if ($sepadat) {
+                    $image->annotateImage($barcode, $width-$ab, $height/2, -90,'Scan2pay');
+                }
+
+                return $image->getImageBlob();
+        }
+
+	public function render_imagegd($symbology, $data, $options, $imagick=false) {
+		list($code, $widths, $width, $height, $x, $y, $w, $h, $bord) =
 			$this->encode_and_calculate_size($symbology, $data, $options);
+
+                $nscale = floor($width/50);
+                $bb = $nscale == 1 ? 2 : 4;
+
 		$image = imagecreatetruecolor($width, $height);
 		imagesavealpha($image, true);
 		$bgcolor = (isset($options['bc']) ? $options['bc'] : 'FFF');
 		$bgcolor = $this->allocate_color($image, $bgcolor);
+                $bdcolor = $this->allocate_color($image, '000');
 		imagefill($image, 0, 0, $bgcolor);
+
+                if (in_array('sepa', $options) && $symbology[0] == 'q') {
+                        $this->sepagd($image, $width, $height, $bdcolor, $bgcolor);
+
+                   } else if (isset($options['bd']) && $options['bd'][0] !== '0' && $options['bd'][1] == 'r' && !in_array('sepa', $options)) {
+                          $trans_colour = imagecolorallocatealpha($image, 0, 0, 0, 127);
+                          imagefill($image, 0, 0, $trans_colour);
+                          imagesetthickness($image, $bord);
+                          $this->imagerectangleround($image, $bord, $bord, $width - $bord, $height - $bord, 10, $bdcolor);
+                          imagefilltoborder($image, 10, 10, $bdcolor, $bgcolor);
+
+                   } else if (isset($options['bd']) && $options['bd'][0] == '0' && $options['bd'][1] == 'r' && !in_array('sepa', $options)) {
+                          $trans_colour = imagecolorallocatealpha($image, 0, 0, 0, 127);
+                          imagefill($image, 0, 0, $trans_colour);
+                          imagesetthickness($image, $bord);
+                          $this->imagerectangleround($image, $bord, $bord, $width - $bord, $height - $bord, 10, $bgcolor);
+                          imagefilltoborder($image, 10, 10, $bgcolor, $bgcolor);
+
+                   } else if (isset($options['bd']) && $options['bd'][0] !== '0' && $options['bd'][1] == '0' && !in_array('sepa', $options)) {
+                          imagesetthickness($image, $bord);
+                          imagerectangle($image, $bord/2, $bord/2, $width - $bord, $height - $bord, $bdcolor);
+
+                   } else {
+                          imagerectangle($image, -1, -1, $width, $height, $bdcolor);
+                }
+
 		$colors = array(
-			(isset($options['cs']) ? $options['cs'] : ''),
+			((isset($options['cs']) && ! isset($options['ms'])) || (isset($options['ms']) && ($options['ms'] == 's') || $symbology[0] != 'q') ? $options['cs'] : '#00000000'),
 			(isset($options['cm']) ? $options['cm'] : '000'),
-			(isset($options['c2']) ? $options['c2'] : 'F00'),
+                        ($options['cz'] ?? '#00000000'), // reserved for quit zones linear barcodes
 			(isset($options['c3']) ? $options['c3'] : 'FF0'),
 			(isset($options['c4']) ? $options['c4'] : '0F0'),
-			(isset($options['c5']) ? $options['c5'] : '0FF'),
-			(isset($options['c6']) ? $options['c6'] : '00F'),
-			(isset($options['c7']) ? $options['c7'] : 'F0F'),
-			(isset($options['c8']) ? $options['c8'] : 'FFF'),
-			(isset($options['c9']) ? $options['c9'] : '000'),
+			(isset($options['c9']) ? $options['c9'] : '000')
 		);
 		foreach ($colors as $i => $color) {
 			$colors[$i] = $this->allocate_color($image, $color);
 		}
-		$this->dispatch_render_image(
-			$image, $code, $x, $y, $w, $h, $colors, $widths, $options
+                $this->dispatch_render_imagick_gd(
+		       $image, $code, $x, $y, $w, $h, $colors, $widths, $options, $imagick=false
 		);
+
                 ob_start();
                 imagepng($image);
-		return ob_get_clean();
+                $image = ob_get_clean();
+                return $image;
 	}
 
 	public function render_svg($symbology, $data, $options) {
-		list($code, $widths, $width, $height, $x, $y, $w, $h) =
+		list($code, $widths, $width, $height, $x, $y, $w, $h, $bord) =
 			$this->encode_and_calculate_size($symbology, $data, $options);
+
+                $nscale = floor($width/50);
+                $bw = $nscale < 2 ? 2 : 4;
+
 		$svg  = '<?xml version="1.0"?>';
 		$svg .= '<svg xmlns="http://www.w3.org/2000/svg" version="1.1"';
 		$svg .= ' width="' . $width . '" height="' . $height . '"';
 		$svg .= ' viewBox="0 0 ' . $width . ' ' . $height . '"><g>';
 		$bgcolor = (isset($options['bc']) ? $options['bc'] : 'white');
+                $bdcolor = 'black';
+                $rd = (isset($options['sf']) && $options['sf'] == 1) ? 10 : 15;
+
 		if ($bgcolor) {
-			$svg .= '<rect x="0" y="0"';
-			$svg .= ' width="' . $width . '" height="' . $height . '"';
-			$svg .= ' fill="' . htmlspecialchars($bgcolor) . '"/>';
-		}
+			$svg .= '<rect x="'.($bord/2).'" y="'.($bord/2).'"';
+
+                    if ((isset($options['bd']) && $options['bd'][1] == 'r') || in_array('sepa', $options)) {
+                        $svg .= ' rx="'.$rd.'" ry="'.$rd.'"';
+                    }
+			$svg .= ' width="' . ($width-$bord) . '" height="' . ($height-$bord) . '"';
+			$svg .= ' fill="' . htmlspecialchars($bgcolor) . '"';
+                    if (in_array('sepa', $options) && $symbology[0] == 'q') {
+                            $svg .= $this->sepasvg($width, $height, $bdcolor, $bgcolor);
+                    }
+                    else if (isset($options['bd']) && $options['bd'][0] !== '0' && (!in_array('sepa', $options))) {
+                        $svg .= ' stroke-width="'.$bord.'" stroke="' . $bdcolor . '"/>';
+                    }
+
+                    else {
+                        $svg .= '/>';
+                    }
+                }
 		$colors = array(
-			(isset($options['cs']) ? $options['cs'] : ''),
+                        ((isset($options['cs']) && ! isset($options['ms'])) || (isset($options['ms']) && $options['ms'] == 's') || $symbology[0] != 'q' ? $options['cs'] : '#00000000'),
 			(isset($options['cm']) ? $options['cm'] : 'black'),
-			(isset($options['c2']) ? $options['c2'] : '#FF0000'),
+                        ($options['cz'] ?? '#00000000'), // reserved for quit zones linear barcodes
 			(isset($options['c3']) ? $options['c3'] : '#FFFF00'),
 			(isset($options['c4']) ? $options['c4'] : '#00FF00'),
-			(isset($options['c5']) ? $options['c5'] : '#00FFFF'),
-			(isset($options['c6']) ? $options['c6'] : '#0000FF'),
-			(isset($options['c7']) ? $options['c7'] : '#FF00FF'),
-			(isset($options['c8']) ? $options['c8'] : 'white'),
-			(isset($options['c9']) ? $options['c9'] : 'black'),
+			(isset($options['c9']) ? $options['c9'] : 'black')
 		);
 		$svg .= $this->dispatch_render_svg(
 			$code, $x, $y, $w, $h, $colors, $widths, $options
@@ -162,6 +306,7 @@ class barcode_generator {
 		$left = (isset($options['pl']) ? (int)$options['pl'] : $horiz);
 		$right = (isset($options['pr']) ? (int)$options['pr'] : $horiz);
 		$bottom = (isset($options['pb']) ? (int)$options['pb'] : $vert);
+                $bord = (isset($options['bd']) && !in_array('sepa', $options) && in_array($options['bd'][0], range(2, 4, 2))) ? (int)$options['bd'][0] : 4;
 		$dwidth = ceil($size[0] * $scalex) + $left + $right;
 		$dheight = ceil($size[1] * $scaley) + $top + $bottom;
                 $iwidth = (isset($options['w']) ? (int)$options['w'] + $left + $right : $dwidth);
@@ -170,9 +315,85 @@ class barcode_generator {
 		$sheight = $iheight - $top - $bottom;
 		return array(
 			$code, $widths, $iwidth, $iheight,
-			$left, $top, $swidth, $sheight
+			$left, $top, $swidth, $sheight, $bord
 		);
 	}
+
+        private function sepaimagick($barcode, $width, $height, $bdcolor, $bgcolor) {
+
+                $nscale = floor($width/50);
+                $sf = $nscale > 0 && $nscale < 5 ? ($nscale*6)+4 : 32;
+                $bw = $nscale < 2 ? 2 : 4;
+                $bb = $nscale < 2 ? 3 : $nscale*4;
+                $tw = (($sf*2)+$bb);
+                $ab = $nscale < 3 ? 5 : 8;
+
+                $barcode->setStrokeColor($bgcolor);
+                $barcode->setfillcolor($bgcolor);
+                $barcode->rectangle($width-10, ($height/2)-$tw, $width-($bw == 4 ? 2 : 3), ($height/2)+$tw);
+
+                $barcode->setStrokeColor('#00000000');
+                $barcode->setfillcolor('black');
+                $barcode->setFont(__dir__.'/FreeSans.ttf');
+                $barcode->setFontSize($sf);
+                $barcode->setTextAlignment(\Imagick::ALIGN_CENTER);
+                $sepadat = true;
+        }
+
+        private function sepasvg($width, $height, $bdcolor, $bgcolor) {
+
+                $text = 'Scan2pay';
+                $font = __dir__.'/FreeSans.ttf';
+                $dc = 'red';
+                $nscale = floor($width/50);
+                $sf = $nscale > 0 && $nscale < 5 ? ($nscale*6)+4 : 32;
+                $bw = $nscale < 2 ? 2 : 4;
+                $bb = $nscale < 2 ? 3 : $nscale*4;
+                $ab = $nscale < 3 ? 4 : 7;
+                $tw = (($sf*2)+$bb);
+                $ty = ($height/2)-$tw;
+                $theight = ($tw*2);
+                $tt = $bw == 2 ? 1 : 0;
+
+                $svg = ' stroke-width="'.$bw.'" stroke="' . $bdcolor . '" />';
+                $svg .= '<rect x="'.($width-10).'" y="'.$ty.'" width="'.(10-$tt).'" height="'.$theight.'" fill="'.$bgcolor.'" />';
+                $svg .= '<text fill="'.$bdcolor.'" font-size="'.$sf.'" font-family="'.$font.'" x="'.(-$height/2).'" y="'.($width-$ab).'"';
+                $svg .= ' text-anchor="middle" transform="rotate(-90)">Scan2pay</text>';
+
+                return $svg;
+        }
+
+        private function sepagd($image, $width, $height, $bdcolor, $bgcolor) {
+                $text = 'Scan2pay';
+                $font = __dir__.'/FreeSans.ttf';
+                $trans_colour = imagecolorallocatealpha($image, 0, 0, 0, 127);
+                imagefill($image, 0, 0, $trans_colour);
+                $nscale = floor($width/50);
+                $bb = $nscale == 1 ? 2 : 4;
+                imagesetthickness($image, $bb);
+                $this->imagerectangleround($image, $bb/2, $bb/2, $width - ($bb/2), $height - ($bb/2), 10, $bdcolor);
+                imagefilltoborder($image, 10, 10, $bdcolor, $bgcolor);
+                $sf = $nscale > 0 && $nscale < 5 ? ($nscale*4)+4 : $sf = 24;
+                $box = imageftbbox($sf, 0, $font, $text);
+                $xh = round(abs($box[4]/2));
+                $xw = round(abs($box[1]));
+                imagefilledrectangle($image, $width-($sf*1.5), round(($height/4)-$sf), $width-1, round(($height/4*3)+$sf), $bgcolor);
+                imagefttext($image, $sf, 90, $width-$xw, round(($height/2)+$xh), $bdcolor, $font, $text);
+        }
+
+        private function imagerectangleround($img, $x1, $y1, $x2, $y2, $radius, $color) {
+                $radius = min($radius, floor(min(($x2-$x1)/2, ($y2-$y1)/2)));
+
+                imageline($img, $x1+$radius, $y1, $x2-$radius, $y1, $color);
+                imageline($img, $x1+$radius, $y2, $x2-$radius, $y2, $color);
+                imageline($img, $x1, $y1+$radius, $x1, $y2-$radius, $color);
+                imageline($img, $x2, $y1+$radius, $x2, $y2-$radius, $color);
+
+                imagearc($img,$x1+$radius, $y1+$radius, $radius*2, $radius*2, 180 , 270, $color);
+                imagearc($img,$x2-$radius, $y1+$radius, $radius*2, $radius*2, 270 , 360, $color);
+                imagearc($img,$x1+$radius, $y2-$radius, $radius*2, $radius*2, 90 , 180, $color);
+                imagearc($img,$x2-$radius, $y2-$radius, $radius*2, $radius*2, 360 , 90, $color);
+        }
 
 	private function allocate_color($image, $color) {
 		$color = preg_replace('/[^0-9A-Fa-f]/', '', $color);
@@ -268,26 +489,34 @@ class barcode_generator {
 		return array(0, 0);
 	}
 
-	private function dispatch_render_image(
-		$image, $code, $x, $y, $w, $h, $colors, $widths, $options
-	) {
-		if ($code && isset($code['g']) && $code['g']) {
-			switch ($code['g']) {
-				case 'l':
-					$this->linear_render_image(
-						$image, $code, $x, $y, $w, $h,
-						$colors, $widths, $options
-					);
-					break;
-				case 'm':
-					$this->matrix_render_image(
-						$image, $code, $x, $y, $w, $h,
-						$colors, $widths, $options
-					);
-					break;
-			}
-		}
-	}
+        private function dispatch_render_imagick_gd(
+                $image, $code, $x, $y, $w, $h, $colors, $widths, $options, $imagick
+        ) {
+                if ($code && isset($code['g']) && $code['g']) {
+                        switch ($code['g']) {
+                                case 'l':
+                                if ($imagick) {
+                                        $this->linear_render_imagick(
+                                                $image, $code, $x, $y, $w, $h,
+                                                $colors, $widths, $options, $imagick
+                                        );
+                                } else {
+                                        $this->linear_render_imagegd(
+                                                $image, $code, $x, $y, $w, $h,
+                                                $colors, $widths, $options, $imagick
+                                        );
+                                }
+                                        break;
+                                case 'm':
+                                        $this->matrix_render_imagick_gd(
+                                                $image, $code, $x, $y, $w, $h,
+                                                $colors, $widths, $options, $imagick
+                                        );
+                                        break;
+                                        //return $blob;
+                        }
+                }
+        }
 
 	private function dispatch_render_svg(
 		$code, $x, $y, $w, $h, $colors, $widths, $options
@@ -321,11 +550,69 @@ class barcode_generator {
 		return array($width, 80);
 	}
 
-	private function linear_render_image(
-		$image, $code, $x, $y, $w, $h, $colors, $widths, $options
+        private function linear_render_imagick(
+                $image, $code, $x, $y, $w, $h, $colors, $widths, $options, $imagick
+        ) {
+                $showtext = (isset($options['st']) && $options['st'] == 0 ? false : true);
+                $textheight = (isset($options['th']) ? (int)$options['th'] : 20);
+                $textsize = (isset($options['ts']) ? (int)$options['ts'] : 16);
+                $textfont = (isset($options['tf']) ? (string)$options['tf'] : __dir__.'/FreeMono.ttf');
+                $textcolor = (isset($options['tc']) ? $options['tc'] : '000');
+
+                $width = 0;
+                foreach ($code['b'] as $block) {
+                        foreach ($block['m'] as $module) {
+                                $width += $module[1] * $widths[$module[2]];
+                        }
+                }
+                if ($width) {
+                        $scale = $w / $width;
+                        $scale = (($scale > 1) ? floor($scale) : 1);
+                        $x = floor($x + ($w - $width * $scale) / 2);
+                } else {
+                        $scale = 1;
+                        $x = floor($x + $w / 2);
+                }
+                foreach ($code['b'] as $block) {
+                        if (isset($block['l'])) {
+                                $label = $block['l'][0];
+                                $ly = (isset($block['l'][1]) ? (float)$block['l'][1] : 1);
+                                $lx = (isset($block['l'][2]) ? (float)$block['l'][2] : 0.5);
+                                $my = round($y + min($h, $h + ($ly - 1) * $textheight));
+                        } else {
+                                $label = null;
+                                $my = $y + $h;
+                        }
+                        $mx = $x;
+                        $image->setFont($textfont);
+                        $image->setFontSize($textsize);
+                        foreach ($block['m'] as $module) {
+                                $mc = $colors[$module[0]];
+                                $mw = $mx + $module[1] * $widths[$module[2]] * $scale;
+                                $image->setfillcolor($mc);
+                                $image->setStrokeColor($mc);
+                                $image->setStrokeWidth(0);
+                                $image->rectangle($mx, $y, $mw - 1, $my - 1);
+                                $mx = $mw;
+                        }
+                        if (!is_null($label) and $showtext) {
+                                $lx = ($x + ($mx - $x) * $lx);
+                                $lw = $textsize - 3 * strlen($label);
+                                $lx = round($lx - $lw / 2);
+                                $image->setfillcolor('#000000');
+                                $image->setStrokeColor('#000000');
+                                $image->setStrokeWidth(0);
+                                $image->annotation($lx, $my + ($textsize - 2), $label);
+                        }
+                        $x = $mx;
+                }
+        }
+
+	private function linear_render_imagegd(
+		$image, $code, $x, $y, $w, $h, $colors, $widths, $options, $imagick
 	) {
                 $showtext = (isset($options['st']) && $options['st'] == 0 ? false : true);
-		$textheight = (isset($options['th']) ? (int)$options['th'] : 10);
+                $textheight = (isset($options['th']) ? (int)$options['th'] : 20);
 		$textsize = (isset($options['ts']) ? (int)$options['ts'] : 1);
 		$textcolor = (isset($options['tc']) ? $options['tc'] : '000');
 		$textcolor = $this->allocate_color($image, $textcolor);
@@ -349,8 +636,6 @@ class barcode_generator {
 				$ly = (isset($block['l'][1]) ? (float)$block['l'][1] : 1);
 				$lx = (isset($block['l'][2]) ? (float)$block['l'][2] : 0.5);
 				$my = round($y + min($h, $h + ($ly - 1) * $textheight));
-				$ly = ($y + $h + $ly * $textheight);
-				$ly = round($ly - imagefontheight($textsize));
 			} else {
 				$label = null;
 				$my = $y + $h;
@@ -366,7 +651,7 @@ class barcode_generator {
 				$lx = ($x + ($mx - $x) * $lx);
 				$lw = imagefontwidth($textsize) * strlen($label);
 				$lx = round($lx - $lw / 2);
-				imagestring($image, $textsize, $lx, $ly, $label, $textcolor);
+				imagestring($image, $textsize, $lx, $my, $label, $textcolor);
 			}
 			$x = $mx;
 		}
@@ -376,7 +661,7 @@ class barcode_generator {
 		$code, $x, $y, $w, $h, $colors, $widths, $options
 	) {
                 $showtext = (isset($options['st']) && $options['st'] == 0 ? false : true);
-		$textheight = (isset($options['th']) ? (int)$options['th'] : 10);
+                $textheight = (isset($options['th']) ? (int)$options['th'] : 20);
 		$textfont = (isset($options['tf']) ? $options['tf'] : 'monospace');
 		$textsize = (isset($options['ts']) ? (int)$options['ts'] : 10);
 		$textcolor = (isset($options['tc']) ? $options['tc'] : 'black');
@@ -405,11 +690,10 @@ class barcode_generator {
 				$label = $block['l'][0];
 				$ly = (isset($block['l'][1]) ? (float)$block['l'][1] : 1);
 				$lx = (isset($block['l'][2]) ? (float)$block['l'][2] : 0.5);
-				$mh = min($h, $h + ($ly - 1) * $textheight);
-				$ly = $h + $ly * $textheight;
+				$my = min($h, $h + ($ly - 1) * $textheight);
 			} else {
 				$label = null;
-				$mh = $h;
+				$my = $h;
 			}
 			$svg .= '<g>';
 			$mx = $x;
@@ -420,7 +704,7 @@ class barcode_generator {
 					$svg .= '<rect';
 					$svg .= ' x="' . $mx . '" y="0"';
 					$svg .= ' width="' . $mw . '"';
-					$svg .= ' height="' . $mh . '"';
+					$svg .= ' height="' . $my . '"';
 					$svg .= ' fill="' . $mc . '"/>';
 				}
 				$mx += $mw;
@@ -428,7 +712,7 @@ class barcode_generator {
 			if (!is_null($label) and $showtext) {
 				$lx = ($x + ($mx - $x) * $lx);
 				$svg .= '<text';
-				$svg .= ' x="' . $lx . '" y="' . $ly . '"';
+				$svg .= ' x="' . $lx . '" y="' . $my + ($textsize + 1) . '"';
 				$svg .= ' text-anchor="middle"';
 				$svg .= ' font-family="'.htmlspecialchars($textfont).'"';
 				$svg .= ' font-size="'.htmlspecialchars($textsize).'"';
@@ -458,36 +742,36 @@ class barcode_generator {
 		return array($width, $height);
 	}
 
-	private function matrix_render_image(
-		$image, $code, $x, $y, $w, $h, $colors, $widths, $options
-	) {
-		$shape = (isset($options['ms']) ? strtolower($options['ms']) : '');
-		$density = (isset($options['md']) ? (float)$options['md'] : 1);
-		list($width, $height) = $this->matrix_calculate_size($code, $widths);
-		if ($width && $height) {
-			$scale = min($w / $width, $h / $height);
-			$scale = (($scale > 1) ? floor($scale) : 1);
-			$x = floor($x + ($w - $width * $scale) / 2);
-			$y = floor($y + ($h - $height * $scale) / 2);
-		} else {
-			$scale = 1;
-			$x = floor($x + $w / 2);
-			$y = floor($y + $h / 2);
-		}
-		$x += $code['q'][3] * $widths[0] * $scale;
-		$y += $code['q'][0] * $widths[0] * $scale;
-		$wh = $widths[1] * $scale;
-		foreach ($code['b'] as $by => $row) {
-			$y1 = $y + $by * $wh;
-			foreach ($row as $bx => $color) {
-				$x1 = $x + $bx * $wh;
-				$mc = $colors[$color];
-				$this->matrix_dot_image(
-					$image, $x1, $y1, $wh, $wh, $mc, $shape, $density
-				);
-			}
-		}
-	}
+        private function matrix_render_imagick_gd(
+                $image, $code, $x, $y, $w, $h, $colors, $widths, $options, $imagick
+        ) {
+                $shape = (isset($options['ms']) ? strtolower($options['ms']) : '');
+                $density = (isset($options['md']) ? (float)$options['md'] : 1);
+                list($width, $height) = $this->matrix_calculate_size($code, $widths);
+                if ($width && $height) {
+                        $scale = min($w / $width, $h / $height);
+                        $scale = (($scale > 1) ? floor($scale) : 1);
+                        $x = floor($x + ($w - $width * $scale) / 2);
+                        $y = floor($y + ($h - $height * $scale) / 2);
+                } else {
+                        $scale = 1;
+                        $x = floor($x + $w / 2);
+                        $y = floor($y + $h / 2);
+                }
+                $x += $code['q'][3] * $widths[0] * $scale;
+                $y += $code['q'][0] * $widths[0] * $scale;
+                $wh = $widths[1] * $scale;
+                foreach ($code['b'] as $by => $row) {
+                        $y1 = $y + $by * $wh;
+                        foreach ($row as $bx => $color) {
+                                $x1 = $x + $bx * $wh;
+                                $mc = $colors[$color ? 1 : 0];
+                                $this->matrix_dot_imagick_gd(
+                                       $image, $x1, $y1, $wh, $wh, $mc, $shape, $density, $imagick
+                                );
+                        }
+                }
+        }
 
 	private function matrix_render_svg(
 		$code, $x, $y, $w, $h, $colors, $widths, $options
@@ -515,7 +799,7 @@ class barcode_generator {
 			$y1 = $y + $by * $wh;
 			foreach ($row as $bx => $color) {
 				$x1 = $x + $bx * $wh;
-				$mc = $colors[$color];
+				$mc = $colors[$color ? 1 : 0];
 				if ($mc) {
 					$svg .= $this->matrix_dot_svg(
 						$x1, $y1, $wh, $wh, $mc, $shape, $density
@@ -526,32 +810,52 @@ class barcode_generator {
 		return $svg . '</g>';
 	}
 
-	private function matrix_dot_image($image, $x, $y, $w, $h, $mc, $ms, $md) {
-		switch ($ms) {
-			default:
-				$x = floor($x + (1 - $md) * $w / 2);
-				$y = floor($y + (1 - $md) * $h / 2);
-				$w = ceil($w * $md);
-				$h = ceil($h * $md);
-				imagefilledrectangle($image, $x, $y, $x+$w-1, $y+$h-1, $mc);
-				break;
-			case 'r':
-				$cx = floor($x + $w / 2);
-				$cy = floor($y + $h / 2);
-				$dx = ceil($w * $md);
-				$dy = ceil($h * $md);
-				imagefilledellipse($image, $cx, $cy, $dx, $dy, $mc);
-				break;
-			case 'x':
-				$x = floor($x + (1 - $md) * $w / 2);
-				$y = floor($y + (1 - $md) * $h / 2);
-				$w = ceil($w * $md);
-				$h = ceil($h * $md);
-				imageline($image, $x, $y, $x+$w-1, $y+$h-1, $mc);
-				imageline($image, $x, $y+$h-1, $x+$w-1, $y, $mc);
-				break;
-		}
-	}
+        private function matrix_dot_imagick_gd($image, $x, $y, $w, $h, $mc, $ms, $md, $imagick) {
+                if ($imagick) {
+                    $image->setfillcolor($mc);
+                    $image->setStrokeColor($mc);
+                    $image->setStrokeWidth(1.5);
+                  } else {
+                    imagesetthickness($image, 2);
+                }
+                switch ($ms) {
+                        default:
+                                $x = floor($x + (1 - $md) * $w / 2);
+                                $y = floor($y + (1 - $md) * $h / 2);
+                                $w = ceil($w * $md);
+                                $h = ceil($h * $md);
+                                if ($imagick) {
+                                    $image->rectangle($x, $y, $x+$w-1, $y+$h-1);
+                                    } else {
+                                    imagefilledrectangle($image, $x, $y, $x+$w-1, $y+$h-1, $mc);
+                                }
+                                break;
+                        case 'r':
+                                $cx = floor($x + $w / 2);
+                                $cy = floor($y + $h / 2);
+                                $dx = ceil($w * $md);
+                                $dy = ceil($h * $md);
+                                if ($imagick) {
+                                $image->ellipse($cx, $cy, ($dx/2), ($dy/2), 0, 360);
+                                    } else {
+                                imagefilledellipse($image, $cx, $cy, $dx, $dy, $mc);
+                                }
+                                break;
+                        case 'x':
+                                $x = floor($x + (1 - $md) * $w / 2);
+                                $y = floor($y + (1 - $md) * $h / 2);
+                                $w = ceil($w * $md);
+                                $h = ceil($h * $md);
+                                if ($imagick) {
+                                $image->line($x, $y, $x+$w-1, $y+$h-1);
+                                $image->line($x, $y+$h-1, $x+$w-1, $y);
+                                    } else {
+                                imageline($image, $x, $y, $x+$w-1, $y+$h-1, $mc);
+                                imageline($image, $x, $y+$h-1, $x+$w-1, $y, $mc);
+                                }
+                                break;
+                }
+        }
 
 	private function matrix_dot_svg($x, $y, $w, $h, $mc, $ms, $md) {
 		switch ($ms) {
@@ -598,7 +902,7 @@ class barcode_generator {
 		/* Quiet zone, start, first digit. */
 		$digit = substr($data, 0, 1);
 		$blocks[] = array(
-			'm' => array(array(0, 9, 0)),
+			'm' => array(array(2, 9, 0)),
 			'l' => array($digit, 0, 1/3)
 		);
 		$blocks[] = array(
@@ -670,7 +974,7 @@ class barcode_generator {
 			)
 		);
 		$blocks[] = array(
-			'm' => array(array(0, 9, 0)),
+			'm' => array(array(2, 9, 0)),
 			'l' => array($digit, 0, 2/3)
 		);
 		/* Return code. */
@@ -682,7 +986,7 @@ class barcode_generator {
 		$blocks = array();
 		/* Quiet zone, start. */
 		$blocks[] = array(
-			'm' => array(array(0, 9, 0))
+			'm' => array(array(2, 9, 0))
 		);
 		$blocks[] = array(
 			'm' => array(
@@ -720,7 +1024,7 @@ class barcode_generator {
 			)
 		);
 		$blocks[] = array(
-			'm' => array(array(0, 9, 0))
+			'm' => array(array(2, 9, 0))
 		);
 		/* Return code. */
 		return array('g' => 'l', 'b' => $blocks);
@@ -737,7 +1041,7 @@ class barcode_generator {
 			array(1, 1, 1, 1, 1, 1)
 		);
 		$blocks[] = array(
-			'm' => array(array(0, 9, 0)),
+			'm' => array(array(2, 9, 0)),
 			'l' => array($system, 0.5, 1/3)
 		);
 		$blocks[] = array(
@@ -793,7 +1097,7 @@ class barcode_generator {
 			)
 		);
 		$blocks[] = array(
-			'm' => array(array(0, 9, 0)),
+			'm' => array(array(2, 9, 0)),
 			'l' => array($pad, 0.5, 2/3)
 		);
 		/* Return code. */
@@ -805,7 +1109,7 @@ class barcode_generator {
 		$blocks = array();
 		/* Quiet zone, start. */
 		$blocks[] = array(
-			'm' => array(array(0, 9, 0)),
+			'm' => array(array(2, 9, 0)),
 			'l' => array('<', 0.5, 1/3)
 		);
 		$blocks[] = array(
@@ -860,7 +1164,7 @@ class barcode_generator {
 			)
 		);
 		$blocks[] = array(
-			'm' => array(array(0, 9, 0)),
+			'm' => array(array(2, 9, 0)),
 			'l' => array('>', 0.5, 2/3)
 		);
 		/* Return code. */
@@ -1669,7 +1973,7 @@ class barcode_generator {
 		$blocks = array();
 		/* Quiet zone, start. */
 		$blocks[] = array(
-			'm' => array(array(0, 10, 0))
+			'm' => array(array(2, 10, 0))
 		);
 		$blocks[] = array(
 			'm' => array(
@@ -1710,7 +2014,7 @@ class barcode_generator {
 			)
 		);
 		$blocks[] = array(
-			'm' => array(array(0, 10, 0))
+			'm' => array(array(2, 10, 0))
 		);
 		/* Return code. */
 		return array('g' => 'l', 'b' => $blocks);

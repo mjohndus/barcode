@@ -119,8 +119,6 @@ file_put_contents($filename, $svg);
 `th` - Distance from text baseline to bottom of modules. Default is 10. Applies to linear barcodes only. Fixed wrong direction
 
 ```diff
-+ gh - Distance from baseline for Module left - middle - right. Applies to linear barcodes (EAN + UPC) only.
-
 + st - Showtext -> set to 0 disables text on output Default is 1. Applies to linear barcodes only.
 
 + bd - draws a border -> 0 no border, 1 normal, r with radius (default).

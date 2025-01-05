@@ -1,19 +1,23 @@
 {
-    "name": "mjohndus/barcode",
+    "name": "mjohndus/Barcoder",
     "type": "library",
-    "description": "Generate barcodes from a single PHP file.",
-    "homepage": "https://github.com/kreativekorp/barcode/",
-    "license": [
-      "MIT"
-    ],
+    "license": "Apache-2.0",
+    "description": "PHP library to generate barcodes",
+    "keywords": ["library", "barcode", "2d-barcode"],
+    "homepage": "https://github.com/mjohndus/barcode",
     "authors": [
         {
-            "name": "Kreative Software",
-            "email": "support@kreativekorp.com",
-            "homepage": "http://www.kreativekorp.com"
+            "name": "mjohndus",
+            "homepage": "https://github.com/mjohndus",
+            "role": "Developer"
         }
     ],
+    "require": {
+        "php": "^7.1||^8"
+    },
     "autoload": {
-        "classmap": ["barcode.php"]
+        "psr-4": {
+            "Barcoder": "src/"
+        }
     }
 }

@@ -1,5 +1,5 @@
 
-![Linear Example](https://raw.github.com/mjohndus/barcode/mjohndus/examples/images/q-rcode.png)  ![Linear Example](https://raw.github.com/mjohndus/barcode/mjohndus/examples/images/linear.png)
+![Linear Example](https://raw.github.com/mjohndus/barcode/mjohndus/examples/images/qr-code.png)  ![Linear Example](https://raw.github.com/mjohndus/barcode/mjohndus/examples/images/linear.png)
 
 # barcode.php
 
